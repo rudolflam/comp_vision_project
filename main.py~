@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import logging
+
 import cv2
 import numpy as np
 import argparse
@@ -7,7 +7,6 @@ import glob
 import os
 import copy
 import string
-from mser import MSER
 
 def show_image(image, window_name="Image"):
     image = cv2.resize(image, (0,0), fx=0.5,fy=0.5)
@@ -18,16 +17,11 @@ def show_image(image, window_name="Image"):
 
 class TextDetector(object):
     @staticmethod    
-    def run_MSER(image, show=False):
-        mser = MSER(image, 10)
-        data = mser.build_component_tree()
-        universe = data["points"]
-        node_tree = data["node tree"]
-        components= data["components"]
-        components_to_points = data["component to points"]
+    def MSER(image, show=False):
+        mser = cv2.MSER()
+        mser_regions = mser.detect(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None)
         # prune the excess regioins
-        mser_regions = TextDetector.prune_MSERs(node_tree)
-        print mser_regions
+        mser_regions = TextDetector.prune_MSERs(mser_regions)
         if show:
             hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
              # display the image
@@ -158,15 +152,11 @@ if __name__ == "__main__":
     image = cv2.imread(args["img_path"])
     trained_path = args["trained"] 
 
-    detector = cv2.FeatureDetector_create('MSER')
-    points = detector.detect(image)
-    
-    
     # character candidates extraction
     # uses maximally stable extremal region extractor
     # then prunes according to secotion 3.1 of 
     # Robust Text Detection in Natural Scene Images (Xu-Cheng Yin et al.)
-    mser_regions = TextDetector.run_MSER(image, show=True)
+    mser_regions = TextDetector.MSER(image, show=true)
     trained_data = None
     if not trained_path:
         # load the dataset 
