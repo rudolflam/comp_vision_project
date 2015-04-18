@@ -75,14 +75,14 @@ class TextDetector(object):
                         copy[i][j] = 255
                     else:
                         copy[i][j] = 0
-            
-            contours = cv2.findContours(copy, cv.CV_RETR_EXTERNAL)
-            cv2.minAreaRect(contours)
-            return contours
+            contours = cv2.findContours(copy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
+            contour = max(contours, key=lambda cnt:cv2.contourArea(cnt))
+            _,_,w,h = cv2.boundingRect(contour)
+            return w/h
         def to_ER_tree(parent_component, parent_ER):
             for child in parent_component.children:
                 child_ER = ER(child)
-                print aspect_ratio(child)
+                print "Aspect ratio of child :", aspect_ratio(child)
                 child_ER.variation = variation(parent_component, child)
                 parent_ER.add_child(child_ER)
                 if child.children:
@@ -107,8 +107,9 @@ class TextDetector(object):
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
+        print "Before :",parent_ER
         linear_reduction(parent_ER)
-        print parent_ER        
+        print "After :",parent_ER    
         
         return 
         
@@ -225,6 +226,8 @@ if __name__ == "__main__":
     parser.add_argument("img_path", help="The path to the image")
     parser.add_argument("-t", "--trained", help="File location of trained data")
     args = vars(parser.parse_args())
+    
+    logging.getLogger("").setLevel(logging.getLevelName("INFO"))    
     
     image = cv2.imread(args["img_path"])
     trained_path = args["trained"] 
