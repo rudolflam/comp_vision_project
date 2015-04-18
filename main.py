@@ -85,11 +85,27 @@ class TextDetector(object):
                 parent_ER.add_child(child_ER)
                 if child.children:
                     to_ER_tree(child, child_ER)
+        def linear_reduction(tree):
+            if len(tree.children)==0:
+                return tree
+            elif len(tree.children)==1:
+                c = linear_reduction(tree.children[0])
+                if tree.variation<= c.variation:
+                    tree.children = c.children
+                    return tree
+                else:
+                    return c
+            else:
+                for index in range(len(tree.children)):
+                    tree.children[index] = linear_reduction(tree.children[index])
+                return tree
             
+                    
+                
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
-        
+        linear_reduction(parent_ER)
         print parent_ER        
         
         return 
