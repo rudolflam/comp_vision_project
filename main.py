@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import logging
+import cv
 import cv2
 import numpy as np
 import argparse
@@ -74,9 +75,10 @@ class TextDetector(object):
                         copy[i][j] = 255
                     else:
                         copy[i][j] = 0
-            print component
-            print copy
-            return 
+            
+            contours = cv2.findContours(copy, cv.CV_RETR_EXTERNAL)
+            cv2.minAreaRect(contours)
+            return contours
         def to_ER_tree(parent_component, parent_ER):
             for child in parent_component.children:
                 child_ER = ER(child)
