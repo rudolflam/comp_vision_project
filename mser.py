@@ -135,19 +135,29 @@ class MSER:
         inv_component_map = {}
         logging.info("Post processing ")
         for point in universe:
-            component_map[point] = set2[point].find()
+            component_map[point] = nodes[set2[point].find().data]
             
         for point in component_map.keys():
             try:
                 inv_component_map[component_map[point]].append(point)
             except:
                 inv_component_map[component_map[point]] = [point]
-        return {"nodes":nodes[min(nodes.keys(), key=lambda node:node.intensity)], "components":component_map, "component to points":inv_component_map}
+        return {"nodes":nodes[min(nodes.keys(), key=lambda node:node.intensity)], "node_map":nodes,"components":component_map, "component to points":inv_component_map}
                         
     def build_component_tree(self):
         # add all points in image to a list
         logging.info("Setting up component tree data structures")
         universe = self.sorted_universe()
         tree = self.build_tree(universe)
-        return {"points":universe, "node tree":tree["nodes"],"components":tree["components"], "components to points":tree["component to points"]}
-        
+        return {"points":universe, "root":tree["nodes"], "nodes":tree["node_map"], "components":tree["components"], "component to points":tree["component to points"]}
+    
+    @staticmethod
+    def extremal_region(component_to_points, component):
+        points = Set()
+        for point in component_to_points[component]:
+            points.add(point)
+        if component.children:
+            for child in component.children:
+                for point in MSER.extremal_region(component_to_points, child):
+                    points.add(point)
+        return points

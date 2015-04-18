@@ -22,11 +22,13 @@ class TextDetector(object):
         mser = MSER(image, 10)
         data = mser.build_component_tree()
         universe = data["points"]
-        node_tree = data["node tree"]
-        components= data["components"]
+        root_node = data["root"]
+        nodes= data["nodes"]
+        print data.keys()
         components_to_points = data["component to points"]
+        
         # prune the excess regioins
-        mser_regions = TextDetector.prune_MSERs(node_tree)
+        mser_regions = TextDetector.prune_MSERs(universe, root_node, nodes, components_to_points)
         print mser_regions
         if show:
             hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
@@ -37,9 +39,42 @@ class TextDetector(object):
         return mser_regions
     
     @staticmethod
-    def prune_MSERs(mser_regions):
-        #TODO
-        return mser_regions
+    def prune_MSERs(points, root_node, nodes, component_to_points):
+        class ER:
+            def __init__(self, component):
+                self.component = component
+                self.variation = 1.0
+                self.children = []
+            def add_child(self, child):
+                self.children.append(child)
+            def __str__(self):
+                return "("+str(self.variation) + ":" + str(self.children)+") "
+            def __repr__(self):
+                return str(self)
+        def difference(component1, component2):
+            return MSER.extremal_region(component_to_points, component1).difference(MSER.extremal_region(component_to_points, component2))
+        def size(component):
+            return len(MSER.extremal_region(component_to_points, component))
+        def variation(componentDelta, component):
+            return size(difference(componentDelta, component)) / size(component)
+        def to_ER_tree(parent_component, parent_ER):
+            
+            print parent_component.children
+            for child in parent_component.children:
+                print type(child)
+                child_ER = ER(child)
+                child_ER.variation = variation(parent_component, child)
+                parent_ER.add_child(child_ER)
+                if child.children:
+                    to_ER_tree(child, ER(child))
+            print "ER ",parent_ER
+            
+        current_component = root_node
+        parent_ER = ER(current_component)
+        to_ER_tree(root_node, parent_ER)
+              
+        print parent_ER
+        return 
         
     @staticmethod 
     def candidates_selection(mser_regions):
