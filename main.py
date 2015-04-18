@@ -28,7 +28,7 @@ class TextDetector(object):
         components_to_points = data["component to points"]
         
         # prune the excess regioins
-        mser_regions = TextDetector.prune_MSERs(universe, root_node, nodes, components_to_points)
+        mser_regions = TextDetector.prune_MSERs(image, universe, root_node, nodes, components_to_points)
         print mser_regions
         if show:
             hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
@@ -39,7 +39,13 @@ class TextDetector(object):
         return mser_regions
     
     @staticmethod
-    def prune_MSERs(points, root_node, nodes, component_to_points):
+    def prune_MSERs(image, points, root_node, nodes, component_to_points):
+        
+        a_max = 1.2
+        a_min = 0.7
+        theta1= 0.03
+        theta2= 0.08        
+        
         class ER:
             def __init__(self, component):
                 self.component = component
@@ -56,24 +62,36 @@ class TextDetector(object):
         def size(component):
             return len(MSER.extremal_region(component_to_points, component))
         def variation(componentDelta, component):
-            return size(difference(componentDelta, component)) / size(component)
+            component_size=size(component)
+            return (size(componentDelta)-component_size) / component_size
+        def aspect_ratio(component):
+            copy = image.copy()
+            points_in_region = MSER.extremal_region(component_to_points, component)
+            for i,row in enumerate(copy):
+                for j, _ in enumerate(row):
+                    # check if points in region contains a point at i,j
+                    if filter(lambda point:point.row == i and point.col == j, points_in_region):
+                        copy[i][j] = 255
+                    else:
+                        copy[i][j] = 0
+            print component
+            print copy
+            return 
         def to_ER_tree(parent_component, parent_ER):
-            
-            print parent_component.children
             for child in parent_component.children:
-                print type(child)
                 child_ER = ER(child)
+                print aspect_ratio(child)
                 child_ER.variation = variation(parent_component, child)
                 parent_ER.add_child(child_ER)
                 if child.children:
-                    to_ER_tree(child, ER(child))
-            print "ER ",parent_ER
+                    to_ER_tree(child, child_ER)
             
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
-              
-        print parent_ER
+        
+        print parent_ER        
+        
         return 
         
     @staticmethod 

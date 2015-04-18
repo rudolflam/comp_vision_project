@@ -161,3 +161,4 @@ class MSER:
                 for point in MSER.extremal_region(component_to_points, child):
                     points.add(point)
         return points
+        
