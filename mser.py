@@ -2,6 +2,8 @@ import logging
 import cv2
 import numpy as np
 from sets import Set
+import resource
+import gc
 
 class MSER:
     @staticmethod
@@ -38,11 +40,9 @@ class MSER:
             return root_x
         
     class Point(object):
-        def __init__(self, row, number_rows, col, number_cols, intensity, pixel_intensity):
+        def __init__(self, row, col, intensity, pixel_intensity):
             self.row = row
-            self.rows = number_rows
             self.col = col
-            self.cols = number_cols
             self.intensity = intensity
             self.pixel_intensity = pixel_intensity
         def __str__(self):
@@ -51,10 +51,10 @@ class MSER:
             return str(self)
         def index(self):
             return self.row * self.cols + self.col
-        def neighbours(self, universe):
+        def neighbours(self, universe, image_height, image_width):
             def isClamped(p):
-                if p.row >= self.row-1 and p.row <= self.row+1 and p.row >= 0 and p.row <self.rows:
-                    if p.col >= self.col-1 and p.col <= self.col+1 and p.col >= 0 and p.col < self.cols:
+                if p.row >= self.row-1 and p.row <= self.row+1 and p.row >= 0 and p.row <image_height:
+                    if p.col >= self.col-1 and p.col <= self.col+1 and p.col >= 0 and p.col < image_width:
                         return not(p.row == self.row and p.col == self.col)
                 return False
             return filter(isClamped, universe)
@@ -87,9 +87,16 @@ class MSER:
         universe = []
         logging.info("Generating universe")
         num_rows, num_cols = np.shape(self.grey_scale)
+        
         for i, row in enumerate(self.grey_scale):
-            for j,element in enumerate(row):
-                universe.append(MSER.Point(i,num_rows,j, num_cols,int(element)/self.threshold, element))
+            usage = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+            logging.info("Working on row "+str(i)+"/"+str(num_rows)+" memory usage "+str(usage)+"MB")
+            for j in xrange(len(row)):
+                universe.append(MSER.Point(i,j,int(row[j])/self.threshold, row[j]))
+            gc.collect()
+#            for j,element in enumerate(row):
+#                universe.append(MSER.Point(i,num_rows,j, num_cols,int(element)/self.threshold, element))
+        logging.info("Sorting universe")
         return sorted(universe, key=lambda point:point.intensity, reverse=True)
         
     def build_tree(self, universe):
@@ -98,8 +105,9 @@ class MSER:
         subtreeRoot = {}
         set1 = {}
         set2 = {}
+        num_rows, num_cols = np.shape(self.grey_scale)
         def already_processed_neighbours(point):
-            return filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe))
+            return filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe,num_rows,num_cols))
         logging.info("Preprocessing step")
         for point in universe:
             set1[point] = MSER.DisjointSet(point)
@@ -148,6 +156,7 @@ class MSER:
         # add all points in image to a list
         logging.info("Setting up component tree data structures")
         universe = self.sorted_universe()
+        logging.info("Building tree")
         tree = self.build_tree(universe)
         return {"points":universe, "root":tree["nodes"], "nodes":tree["node_map"], "components":tree["components"], "component to points":tree["component to points"]}
     
