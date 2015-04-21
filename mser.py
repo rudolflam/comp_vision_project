@@ -15,6 +15,7 @@ class MSER:
         return np.array([[110,90,100],[50]*3, [40,20,50], [50]*3, [120,70,80]])
     
     class DisjointSet(object):
+        __slots__ = ["parent","rank","data"]
         def __init__(self, data):
             self.parent = self
             self.rank = 0
@@ -40,6 +41,7 @@ class MSER:
             return root_x
         
     class Point(object):
+        __slots__ = ["row", "col", "intensity", "pixel_intensity"]
         def __init__(self, row, col, intensity, pixel_intensity):
             self.row = row
             self.col = col
@@ -60,6 +62,7 @@ class MSER:
             return filter(isClamped, universe)
     
     class ComponentTree(object):
+        __slots__=["children", "level"]
         def __init__(self, level):
             self.children = []
             self.level = level
@@ -93,7 +96,7 @@ class MSER:
             logging.info("Working on row "+str(i)+"/"+str(num_rows)+" memory usage "+str(usage)+"MB")
             for j in xrange(len(row)):
                 universe.append(MSER.Point(i,j,int(row[j])/self.threshold, row[j]))
-            gc.collect()
+#            gc.collect()
 #            for j,element in enumerate(row):
 #                universe.append(MSER.Point(i,num_rows,j, num_cols,int(element)/self.threshold, element))
         logging.info("Sorting universe")
@@ -109,11 +112,17 @@ class MSER:
         def already_processed_neighbours(point):
             return filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe,num_rows,num_cols))
         logging.info("Preprocessing step")
+        num_points = len(universe)
+        i = 0
         for point in universe:
+            i += 1
             set1[point] = MSER.DisjointSet(point)
             set2[point] = MSER.DisjointSet(point)
             nodes[point] = MSER.ComponentTree(point.intensity)
             subtreeRoot[point] = point
+            logging.info("Working on "+str(i)+"/"+str(num_points)+"("+str(i*100/num_points)+"%) point")
+#            usage = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+#            logging.infor("memory usage "+str(usage)+"MB")
         
         logging.info("Modifying tree")
         for point in universe:
