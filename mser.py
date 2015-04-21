@@ -78,7 +78,7 @@ class MSER:
             for child in children:
                 self.children.append(child)
             
-    def __init__(self, image, threshold=10):
+    def __init__(self, image, threshold=32):
         self.threshold = int(threshold)
         self.image = image
         try:
@@ -110,7 +110,9 @@ class MSER:
         set2 = {}
         num_rows, num_cols = np.shape(self.grey_scale)
         def already_processed_neighbours(point):
-            return filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe,num_rows,num_cols))
+            alrdy_processed = filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe,num_rows,num_cols))
+            logging.info( "Point "+str(point)+"\nAlready processed "+ str(alrdy_processed))            
+            return alrdy_processed
         logging.info("Preprocessing step")
         num_points = len(universe)
         i = 0
@@ -128,6 +130,7 @@ class MSER:
         for point in universe:
             current_canonical = set1[point].find()
             current_node = set2[subtreeRoot[current_canonical.data]].find()
+            logging.info("Working on "+str(current_node))
             for neighbour in already_processed_neighbours(point) :
                 if neighbour.intensity >= point.intensity:
                     neighbour_canonical = set1[neighbour].find()
@@ -135,6 +138,7 @@ class MSER:
                     logging.info("Comparing intensities of "+str(current_node.data)+ " " + str(neighbour_node.data))
                     if current_node != neighbour_node:
                         if nodes[current_node.data].level == nodes[neighbour_node.data].level :
+                            # merge the nodes
                             nn = set2[neighbour_node.data] 
                             cn = set2[current_node.data]
                             temp = nn.union(cn)
@@ -148,6 +152,8 @@ class MSER:
                             nodes[current_node.data].add_child(nodes[neighbour_node.data])
                         current_canonical = neighbour_canonical.union(current_canonical)
                         subtreeRoot[current_canonical.data] = current_node.data
+            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+            logging.info("memory usage "+str(usage)+"MB")
         component_map = {}
         inv_component_map = {}
         logging.info("Post processing ")
