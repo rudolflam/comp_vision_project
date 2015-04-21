@@ -1,6 +1,5 @@
 #!/usr/bin/python
 import logging
-import cv
 import cv2
 import numpy as np
 import argparse

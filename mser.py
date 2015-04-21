@@ -2,8 +2,17 @@ import logging
 import cv2
 import numpy as np
 from sets import Set
-import resource
+import platform
+linux = False
+if platform.system() == "Linux":
+    linux = True
+    import resource
 import gc
+
+def get_resource():
+    if linux:
+        return str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    return "None available"
 
 class MSER:
     @staticmethod
@@ -92,8 +101,7 @@ class MSER:
         num_rows, num_cols = np.shape(self.grey_scale)
         
         for i, row in enumerate(self.grey_scale):
-            usage = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
-            logging.info("Working on row "+str(i)+"/"+str(num_rows)+" memory usage "+str(usage)+"MB")
+            logging.info("Working on row "+str(i)+"/"+str(num_rows)+" memory usage "+get_resource()+"MB")
             for j in xrange(len(row)):
                 universe.append(MSER.Point(i,j,int(row[j])/self.threshold, row[j]))
 #            gc.collect()
@@ -124,7 +132,7 @@ class MSER:
             subtreeRoot[point] = point
             logging.info("Working on "+str(i)+"/"+str(num_points)+"("+str(i*100/num_points)+"%) point")
 
-        logging.info("memory usage "+str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)+"MB")
+        logging.info("memory usage "+get_resource()+"MB")
         
         logging.info("Modifying tree")
         for point in universe:
@@ -152,8 +160,7 @@ class MSER:
                             nodes[current_node.data].add_child(nodes[neighbour_node.data])
                         current_canonical = neighbour_canonical.union(current_canonical)
                         subtreeRoot[current_canonical.data] = current_node.data
-            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-            logging.info("memory usage "+str(usage)+"MB")
+            logging.info("memory usage "+get_resource()+"MB")
         component_map = {}
         inv_component_map = {}
         logging.info("Post processing ")
