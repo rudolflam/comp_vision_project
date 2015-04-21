@@ -143,7 +143,7 @@ class MSER:
                 if neighbour.intensity >= point.intensity:
                     neighbour_canonical = set1[neighbour].find()
                     neighbour_node = set2[subtreeRoot[neighbour_canonical.data]].find()
-                    logging.info("Comparing intensities of "+str(current_node.data)+ " " + str(neighbour_node.data))
+#                    logging.info("Comparing intensities of "+str(current_node.data)+ " " + str(neighbour_node.data))
                     if current_node != neighbour_node:
                         if nodes[current_node.data].level == nodes[neighbour_node.data].level :
                             # merge the nodes
@@ -152,8 +152,10 @@ class MSER:
                             temp = nn.union(cn)
                             if temp == cn :
                                 nodes[cn.data].add_children(nodes[nn.data].children)
+                                nodes[nn.data].children = []
                             else:
                                 nodes[nn.data].add_children(nodes[cn.data].children)
+                                nodes[cn.data].children = []
                             current_node = temp
                         else:
                             # the level is less than neighbour node's level
