@@ -30,7 +30,7 @@ class MSER:
             root_x = self.find()
             root_y = y.find()
             if root_x == root_y:
-                return
+                return root_x
             if root_x.rank < root_y.rank:
                 root_x.parent = root_y
             elif root_x.rank > root_y.rank:
@@ -121,8 +121,8 @@ class MSER:
             nodes[point] = MSER.ComponentTree(point.intensity)
             subtreeRoot[point] = point
             logging.info("Working on "+str(i)+"/"+str(num_points)+"("+str(i*100/num_points)+"%) point")
-#            usage = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
-#            logging.infor("memory usage "+str(usage)+"MB")
+
+        logging.info("memory usage "+str(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)+"MB")
         
         logging.info("Modifying tree")
         for point in universe:
