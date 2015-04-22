@@ -135,7 +135,21 @@ class TextDetector(object):
                 for index in range(len(tree.children)):
                     tree.children[index] = linear_reduction(tree.children[index])
                 return tree
-                  
+        def tree_acum(tree):
+            if len(tree.children) >= 2:
+                C = []
+                min_var = tree_acum(tree.children[0]).variation;
+                for index in range(len(tree.children)):
+                    C = C+tree_acum(tree.children[index])
+                    if tree_acum(tree.children[index]).variation<min_var:
+                        min_var =  tree_acum(tree.children[index]).variation
+                if tree.variation <= min_var:
+                    tree.children = []
+                    return tree
+                else:
+                    return C
+            else:
+                return tree
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
