@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import logging
+import itertools
 import cv2
 import numpy as np
 import argparse
@@ -8,6 +9,7 @@ import os
 import copy
 import string
 from mser import MSER
+from numpy import int32
 
 def show_image(image, window_name="Image"):
     image = cv2.resize(image, (0,0), fx=0.5,fy=0.5)
@@ -29,10 +31,39 @@ class TextDetector(object):
         
         # prune the excess regioins
         mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, components_to_points)
-
+        print "mser stuff",mser_regions
+        pts1 = components_to_points[mser_regions[2].component]
+        print "mser0 points",pts1
+        contours = map( lambda c: components_to_points[c.component],mser_regions)
+        
+        def convertPoint(point):
+            lst = [point.row,point.col]
+            lst = np.array([lst],dtype= int32)
+            return [lst]
+        #points = map(lambda i: map(lambda c : convertPoint(c),i),contours)
+        #print list(itertools.chain(*points))
+        
+        #test = np.array(reduce(lambda x, y: x+y, points),dtype= int32)
+        our_contours =  map(lambda c: np.array(reduce(lambda x, y: x+y, map(lambda p: convertPoint(p), c)),dtype= int32),contours)
+        print "crash",our_contours
+        for cnt in our_contours:
+            hull = cv2.convexHull(cnt)
+            display = image.copy()
+            cv2.polylines(display, hull, 1, (0,255,0))
+            
+            #(x,y),radius = cv2.minEnclosingCircle(cnt)
+            #center = (int(x),int(y))
+            #radius = int(radius)
+            #im= cv2.circle(display,center,radius,(0,255,0),2)
+            
+            cv2.imshow("fml",display)
+            cv2.waitKey()
+        
+        #print "hi",test
 #        if show:
 #            hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
 #             # display the image
+
 #            display = image.copy()
 #            cv2.polylines(display, hulls, 1, (0,255,0))
 #            show_image(display)
@@ -136,7 +167,7 @@ class TextDetector(object):
                 for c in tree.children:
                     C = C + tree_accumulation(c)
                 if tree.variation <= min(C, key=lambda c: c.variation):
-                    tree.children = []
+                    tree.children=empty
                     return [tree]
                 else:
                     return C
@@ -152,7 +183,7 @@ class TextDetector(object):
         acc = tree_accumulation(lr)
         print "ER Tree after accumulation ", acc
         return acc
-        
+    
     @staticmethod 
     def candidates_selection(mser_regions):
         #TODO
