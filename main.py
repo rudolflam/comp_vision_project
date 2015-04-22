@@ -28,14 +28,14 @@ class TextDetector(object):
         components_to_points = data["component to points"]
         
         # prune the excess regioins
-        mser_regions = TextDetector.prune_MSERs(image, universe, root_node, nodes, components_to_points)
-        print mser_regions
-        if show:
-            hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
-             # display the image
-            display = image.copy()
-            cv2.polylines(display, hulls, 1, (0,255,0))
-            show_image(display)
+        mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, components_to_points)
+
+#        if show:
+#            hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
+#             # display the image
+#            display = image.copy()
+#            cv2.polylines(display, hulls, 1, (0,255,0))
+#            show_image(display)
         return mser_regions
     
     @staticmethod
@@ -68,22 +68,56 @@ class TextDetector(object):
         def aspect_ratio(component):
             copy = image.copy()
             points_in_region = MSER.extremal_region(component_to_points, component)
-            for i,row in enumerate(copy):
-                for j, _ in enumerate(row):
-                    # check if points in region contains a point at i,j
-                    if filter(lambda point:point.row == i and point.col == j, points_in_region):
-                        copy[i][j] = 255
-                    else:
-                        copy[i][j] = 0
-            contours = cv2.findContours(copy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
-            contour = max(contours, key=lambda cnt:cv2.contourArea(cnt))
-            _,_,w,h = cv2.boundingRect(contour)
-            return w/h
+            num_rows, num_cols = np.shape(copy)
+            min_row = num_rows
+            max_row = 0
+            min_col = num_cols
+            max_col = 0
+            for point in points_in_region:
+                if point.row < min_row:
+                    min_row = point.row
+                elif point.row > max_row:
+                    max_row = point.row
+                if point.col < min_col:
+                    min_col = point.col
+                elif point.col > max_col:
+                    max_col = point.col
+            width, height = (max_row-min_row) , (max_col-min_col)
+            if width > 0 and height>0:
+                return float(width)/height
+            return 0
+#            for i,row in enumerate(copy):
+#                for j, _ in enumerate(row):
+#                    # check if points in region contains a point at i,j
+#                    if filter(lambda point:point.row == i and point.col == j, points_in_region):
+#                        copy[i][j] = 0
+#                    else:
+#                        copy[i][j] = 255
+#
+#            contours = cv2.findContours(copy.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
+#
+#            
+#            if contours :
+#                render = cv2.cvtColor(copy, cv2.COLOR_GRAY2BGR)
+#                for cnt in contours:
+#                    rect = cv2.minAreaRect(cnt)
+#                    box = cv2.cv.BoxPoints(rect)
+#                    box = np.int0(box)
+#                    cv2.drawContours(render,[box],0,(0,0,255),2)
+#                contour = max(contours, key=lambda cnt:cv2.contourArea(cnt))
+#                
+#                _,_,w,h = cv2.boundingRect(contour)
+#                cv2.imshow("Render", render)
+#                cv2.waitKey()
+#                return (w,h)
+#            return (0,0)
         def to_ER_tree(parent_component, parent_ER):
+            # performs regularization simutaneously
             for child in parent_component.children:
                 child_ER = ER(child)
-                print "Aspect ratio of child :", aspect_ratio(child)
-                child_ER.variation = variation(parent_component, child)
+                v = variation(parent_component, child)
+                a = aspect_ratio(child)
+                child_ER.variation = v - theta1*(a-a_max) if a > a_max else v - theta2*(a_min-a) if a<a_min else v
                 parent_ER.add_child(child_ER)
                 if child.children:
                     to_ER_tree(child, child_ER)
@@ -101,17 +135,13 @@ class TextDetector(object):
                 for index in range(len(tree.children)):
                     tree.children[index] = linear_reduction(tree.children[index])
                 return tree
-            
-                    
-                
+                  
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
-        print "Before :",parent_ER
-        linear_reduction(parent_ER)
-        print "After :",parent_ER    
+        linear_reduction(parent_ER)   
         
-        return 
+        return parent_ER
         
     @staticmethod 
     def candidates_selection(mser_regions):
