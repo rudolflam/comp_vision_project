@@ -36,18 +36,28 @@ class MSER:
             return self.parent
         
         def union(self, y):
-            root_x = self.find()
-            root_y = y.find()
-            if root_x == root_y:
-                return root_x
-            if root_x.rank < root_y.rank:
-                root_x.parent = root_y
-            elif root_x.rank > root_y.rank:
-                root_y.parent = root_x
-            else:
-                root_y.parent = root_x
-                root_x.rank += 1
-            return root_x
+            root_x = self
+            root_y = y
+            if root_x.rank > root_y.rank:
+                temp = root_x
+                root_x = root_y
+                root_y = temp
+            if root_x.rank == root_y.rank:
+                root_y.rank += 1
+            root_x.parent = root_y
+            return root_y
+#            root_x = self.find()
+#            root_y = y.find()
+#            if root_x == root_y:
+#                return root_x
+#            if root_x.rank < root_y.rank:
+#                root_x.parent = root_y
+#            elif root_x.rank > root_y.rank:
+#                root_y.parent = root_x
+#            else:
+#                root_y.parent = root_x
+#                root_x.rank += 1
+#            return root_x
         
     class Point(object):
         __slots__ = ["row", "col", "intensity", "pixel_intensity"]
@@ -117,10 +127,11 @@ class MSER:
         set1 = {}
         set2 = {}
         num_rows, num_cols = np.shape(self.grey_scale)
-        def already_processed_neighbours(point):
-            alrdy_processed = filter(lambda neighbour: neighbour.intensity>=point.intensity , point.neighbours(universe,num_rows,num_cols))
-            logging.info( "Point "+str(point)+"\nAlready processed "+ str(alrdy_processed))            
-            return alrdy_processed
+        higher_intensity = filter(lambda neighbour: neighbour.intensity>=universe[0].intensity , universe)
+        def already_processed_neighbours(point,higher_intensity):
+            if point.intensity < higher_intensity[-1].intensity:
+                higher_intensity = filter(lambda neighbour: neighbour.intensity>=point.intensity , universe)        
+            return point.neighbours(higher_intensity,num_rows,num_cols) 
         logging.info("Preprocessing step")
         num_points = len(universe)
         i = 0
@@ -135,11 +146,13 @@ class MSER:
         logging.info("memory usage "+get_resource()+"MB")
         
         logging.info("Modifying tree")
+        i = 0
         for point in universe:
+            i += 1
             current_canonical = set1[point].find()
             current_node = set2[subtreeRoot[current_canonical.data]].find()
-            logging.info("Working on "+str(current_node))
-            for neighbour in already_processed_neighbours(point) :
+            logging.info("Modifying tree for point "+str(i)+"/"+str(num_points)+"("+str(i*100/num_points)+"%) point ")
+            for neighbour in already_processed_neighbours(point,higher_intensity) :
                 if neighbour.intensity >= point.intensity:
                     neighbour_canonical = set1[neighbour].find()
                     neighbour_node = set2[subtreeRoot[neighbour_canonical.data]].find()
@@ -152,10 +165,10 @@ class MSER:
                             temp = nn.union(cn)
                             if temp == cn :
                                 nodes[cn.data].add_children(nodes[nn.data].children)
-                                nodes[nn.data].children = []
+                                nodes[nn.data].children = nodes[cn.data].children
                             else:
                                 nodes[nn.data].add_children(nodes[cn.data].children)
-                                nodes[cn.data].children = []
+                                nodes[cn.data].children = nodes[nn.data].children
                             current_node = temp
                         else:
                             # the level is less than neighbour node's level
@@ -174,7 +187,11 @@ class MSER:
                 inv_component_map[component_map[point]].append(point)
             except:
                 inv_component_map[component_map[point]] = [point]
-        return {"nodes":nodes[min(nodes.keys(), key=lambda node:node.intensity)], "node_map":nodes,"components":component_map, "component to points":inv_component_map}
+        
+        root_point = subtreeRoot[set1[set2[universe[0]].find().data].find().data]
+        print "Root point ", root_point, " ", root_point.intensity
+        print component_map[root_point]
+        return {"nodes":nodes[root_point], "node_map":nodes,"components":component_map, "component to points":inv_component_map}
                         
     def build_component_tree(self):
         # add all points in image to a list

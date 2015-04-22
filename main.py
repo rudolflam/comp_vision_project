@@ -41,6 +41,7 @@ class TextDetector(object):
     @staticmethod
     def prune_MSERs(image, points, root_node, nodes, component_to_points):
         
+        
         a_max = 1.2
         a_min = 0.7
         theta1= 0.03
