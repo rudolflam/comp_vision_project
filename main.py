@@ -64,7 +64,7 @@ class TextDetector(object):
             return len(MSER.extremal_region(component_to_points, component))
         def variation(componentDelta, component):
             component_size=size(component)
-            return (size(componentDelta)-component_size) / component_size
+            return abs(size(componentDelta)-component_size) / component_size
         def aspect_ratio(component):
             copy = image.copy()
             points_in_region = MSER.extremal_region(component_to_points, component)
@@ -85,39 +85,19 @@ class TextDetector(object):
             width, height = (max_row-min_row) , (max_col-min_col)
             if width > 0 and height>0:
                 return float(width)/height
-            return 0
-#            for i,row in enumerate(copy):
-#                for j, _ in enumerate(row):
-#                    # check if points in region contains a point at i,j
-#                    if filter(lambda point:point.row == i and point.col == j, points_in_region):
-#                        copy[i][j] = 0
-#                    else:
-#                        copy[i][j] = 255
-#
-#            contours = cv2.findContours(copy.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
-#
-#            
-#            if contours :
-#                render = cv2.cvtColor(copy, cv2.COLOR_GRAY2BGR)
-#                for cnt in contours:
-#                    rect = cv2.minAreaRect(cnt)
-#                    box = cv2.cv.BoxPoints(rect)
-#                    box = np.int0(box)
-#                    cv2.drawContours(render,[box],0,(0,0,255),2)
-#                contour = max(contours, key=lambda cnt:cv2.contourArea(cnt))
-#                
-#                _,_,w,h = cv2.boundingRect(contour)
-#                cv2.imshow("Render", render)
-#                cv2.waitKey()
-#                return (w,h)
-#            return (0,0)
+            return 10000
+
         def to_ER_tree(parent_component, parent_ER):
             # performs regularization simutaneously
             for child in parent_component.children:
                 child_ER = ER(child)
                 v = variation(parent_component, child)
                 a = aspect_ratio(child)
-                child_ER.variation = v - theta1*(a-a_max) if a > a_max else v - theta2*(a_min-a) if a<a_min else v
+                if a:
+                    child_ER.variation = v - theta1*(a-a_max) if a > a_max else v - theta2*(a_min-a) if a<a_min else v
+
+                else:
+                    child_ER.variation = 100000
                 parent_ER.add_child(child_ER)
                 if child.children:
                     to_ER_tree(child, child_ER)
@@ -150,12 +130,28 @@ class TextDetector(object):
                     return C
             else:
                 return tree
+        def tree_accumulation(tree):
+            if len(tree.children) >= 2:
+                C = []
+                for c in tree.children:
+                    C = C + tree_accumulation(c)
+                if tree.variation <= min(C, key=lambda c: c.variation):
+                    tree.children = []
+                    return [tree]
+                else:
+                    return C
+            else:
+                return [tree]
         current_component = root_node
         parent_ER = ER(current_component)
         to_ER_tree(root_node, parent_ER)
-        linear_reduction(parent_ER)   
-        
-        return parent_ER
+        print "ER Tree ", parent_ER
+        lr = linear_reduction(parent_ER)
+        print len(lr.children)
+        print "ER Tree after linear reduction ", lr
+        acc = tree_accumulation(lr)
+        print "ER Tree after accumulation ", acc
+        return acc
         
     @staticmethod 
     def candidates_selection(mser_regions):
