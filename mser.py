@@ -194,10 +194,8 @@ class MSER:
         
         def give_point_to_component(point,component,inv_component_map):
             try:
-                print "adding point " , point, " to component ", component
                 inv_component_map[component_map[point]].add(point)
             except:
-                print "creating new set for point ", point
                 inv_component_map[component_map[point]] = Set([point])
             for child in component.children:
                 give_point_to_component(point, child,inv_component_map)
@@ -214,14 +212,14 @@ class MSER:
 #                inv_component_map[component_map[point]].append(point)
 #            except:
 #                inv_component_map[component_map[point]] = [point]
-            
+        
         root_point = subtreeRoot[set1[set2[universe[0]].find().data].find().data]
         print "Root point ", root_point, " ", root_point.intensity
         total_len = 0        
         for c in inv_component_map.keys():
             total_len += len(inv_component_map[c])
         print "Total points in inv ",total_len
-        
+        get_points_from_subtree(nodes[root_point], inv_component_map)
         return {"nodes":nodes[root_point], "node_map":nodes,"components":component_map, "component to points":inv_component_map}
                         
     def build_component_tree(self):

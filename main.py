@@ -1,6 +1,5 @@
 #!/usr/bin/python
 import logging
-import itertools
 import cv2
 import numpy as np
 import argparse
@@ -9,7 +8,6 @@ import os
 import copy
 import string
 from mser import MSER
-from numpy import int32
 
 def show_image(image, window_name="Image"):
     image = cv2.resize(image, (0,0), fx=0.5,fy=0.5)
@@ -23,6 +21,10 @@ class TextDetector(object):
     def draw_component(image, component_to_points, component):
         points = component_to_points[component]
         TextDetector.draw_points(image, points)
+    @staticmethod
+    def draw_colour_component(image, component_to_points, component):
+        points = component_to_points[component]
+        TextDetector.draw_colour_points(image, points)
         
     @staticmethod
     def draw_points(image, points):
@@ -32,63 +34,49 @@ class TextDetector(object):
         cv2.imshow("image", copy)
         cv2.waitKey()
         cv2.destroyAllWindows()
-        
+    @staticmethod
+    def draw_colour_points(image, points):
+        copy = image.copy()
+        for point in points:
+            copy[point.row][point.col] = [255,0,0]
+        cv2.imshow("image", copy)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
     @staticmethod    
     def run_MSER(image, show=False):
-        mser = MSER(image, 32)
+        mser = MSER(image, 64)
         data = mser.build_component_tree()
         universe = data["points"]
         root_node = data["root"]
         nodes= data["nodes"]
-        print data.keys()
-        components_to_points = data["component to points"]
-        
+        component_to_points = data["component to points"]
+
         # prune the excess regions
-        mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, components_to_points)
-        print "mser stuff",mser_regions
-        pts1 = components_to_points[mser_regions[0].component]
-        print "mser0 points",len(pts1)
+        mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, component_to_points)
         
-        def walk (tree, f):
-            print "walked to ", tree
-            f(image, components_to_points, tree)
-            for c in tree.children:
-                walk(c, f)
-            
-        walk(root_node, TextDetector.draw_component)
-        contours = map( lambda c: components_to_points[c.component],mser_regions)
+#        def walk (tree, f):
+#            print "walked to ", tree
+#            f(image, component_to_points, tree)
+#            for c in tree.children:
+#                walk(c, f)
+#        walk(root_node, TextDetector.draw_component)
         
-        def convertPoint(point):
-            lst = [point.row,point.col]
-            lst = np.array([lst],dtype= int32)
-            return [lst]
+        
+        # convert to opencv contours
+#        contours = map( lambda c: component_to_points[c.component],mser_regions)
+#        def convertPoint(point):
+#            lst = [point.row,point.col]
+#            lst = np.array([lst],dtype= int32)
+#            return [lst]
         #points = map(lambda i: map(lambda c : convertPoint(c),i),contours)
         #print list(itertools.chain(*points))
         
         #test = np.array(reduce(lambda x, y: x+y, points),dtype= int32)
-        our_contours =  map(lambda c: np.array(reduce(lambda x, y: x+y, map(lambda p: convertPoint(p), c)),dtype= int32),contours)
-#        print "crash",our_contours
-#        for cnt in our_contours:
-#            hull = cv2.convexHull(cnt)
-#            display = image.copy()
-#            cv2.polylines(display, hull, 1, (0,255,0))
-#            
-#            #(x,y),radius = cv2.minEnclosingCircle(cnt)
-#            #center = (int(x),int(y))
-#            #radius = int(radius)
-#            #im= cv2.circle(display,center,radius,(0,255,0),2)
-#            
-#            cv2.imshow("fml",display)
-#            cv2.waitKey()
-        
-        #print "hi",test
-#        if show:
-#            hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
-#             # display the image
+#        our_contours =  map(lambda c: np.array(reduce(lambda x, y: x+y, map(lambda p: convertPoint(p), c)),dtype= int32),contours)
 
-#            display = image.copy()
-#            cv2.polylines(display, hulls, 1, (0,255,0))
-#            show_image(display)
+        if show:
+            for region in mser_regions:
+                TextDetector.draw_colour_component(image, component_to_points, region.component)
         return mser_regions
     
     @staticmethod
@@ -175,7 +163,8 @@ class TextDetector(object):
                 C = []
                 for c in tree.children:
                     C = C + tree_accumulation(c)
-                if tree.variation <= min(C, key=lambda c: c.variation):
+                if tree.variation <= min(C, key=lambda c: c.variation).variation:
+                    print "Comparing ",tree.variation, " and ", min(C, key=lambda c: c.variation)
                     tree.children=[]
                     return [tree]
                 else:
@@ -202,20 +191,28 @@ class TextDetector(object):
         parent_ER = ER(current_component)
         parent_ER.variation = 100000
         to_ER_tree(root_node, parent_ER)
-        print "Size of ER tree ", t_size(parent_ER)
-        print "Depth of ER tree ", t_depth(parent_ER)
+        logging.info( "Size of ER tree "+ str(t_size(parent_ER)))
+        logging.info( "Depth of ER tree "+ str(t_depth(parent_ER)))
         
-        print "ER Tree ", parent_ER
+        logging.info( "ER Tree "+ str(parent_ER))
         lr = linear_reduction(parent_ER)
-        print "Size after linear reduction ", t_size(lr)
-        print "Depth of LR ", t_depth(lr)
-        print lr
-#        print len(lr.children)
-#        print "ER Tree after linear reduction ", lr
+        logging.info( "Size after linear reduction "+ str(t_size(lr)))
+        logging.info( "Depth of LR ", t_depth(lr))
+        logging.info( lr)
+        logging.info( len(lr.children))
+        logging.info( "ER Tree after linear reduction "+ str(lr))
+#        def walk (tree, f):
+#            print "walked to ", tree
+#            f(image, component_to_points, tree.component)
+#            for c in tree.children:
+#                walk(c, f)
+#            
+#        walk(lr, TextDetector.draw_component)
         acc = tree_accumulation(lr)
-        print "Size after accumulation ", len(acc)
-        print "Accumulation ", acc
-#        print "ER Tree after accumulation ", acc
+        logging.info( "Size after accumulation "+str( len(acc)))
+        logging.info( "Accumulation "+ str(acc))
+        logging.info( "ER Tree after accumulation "+str(acc))
+
         return acc
     
     @staticmethod 
