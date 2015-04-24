@@ -19,9 +19,23 @@ def show_image(image, window_name="Image"):
     cv2.destroyAllWindows()
 
 class TextDetector(object):
+    @staticmethod
+    def draw_component(image, component_to_points, component):
+        points = component_to_points[component]
+        TextDetector.draw_points(image, points)
+        
+    @staticmethod
+    def draw_points(image, points):
+        copy = image.copy()
+        for point in points:
+            copy[point.row][point.col] = 255
+        cv2.imshow("image", copy)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+        
     @staticmethod    
     def run_MSER(image, show=False):
-        mser = MSER(image, 10)
+        mser = MSER(image, 32)
         data = mser.build_component_tree()
         universe = data["points"]
         root_node = data["root"]
@@ -29,11 +43,19 @@ class TextDetector(object):
         print data.keys()
         components_to_points = data["component to points"]
         
-        # prune the excess regioins
+        # prune the excess regions
         mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, components_to_points)
         print "mser stuff",mser_regions
-        pts1 = components_to_points[mser_regions[2].component]
-        print "mser0 points",pts1
+        pts1 = components_to_points[mser_regions[0].component]
+        print "mser0 points",len(pts1)
+        
+        def walk (tree, f):
+            print "walked to ", tree
+            f(image, components_to_points, tree)
+            for c in tree.children:
+                walk(c, f)
+            
+        walk(root_node, TextDetector.draw_component)
         contours = map( lambda c: components_to_points[c.component],mser_regions)
         
         def convertPoint(point):
@@ -45,19 +67,19 @@ class TextDetector(object):
         
         #test = np.array(reduce(lambda x, y: x+y, points),dtype= int32)
         our_contours =  map(lambda c: np.array(reduce(lambda x, y: x+y, map(lambda p: convertPoint(p), c)),dtype= int32),contours)
-        print "crash",our_contours
-        for cnt in our_contours:
-            hull = cv2.convexHull(cnt)
-            display = image.copy()
-            cv2.polylines(display, hull, 1, (0,255,0))
-            
-            #(x,y),radius = cv2.minEnclosingCircle(cnt)
-            #center = (int(x),int(y))
-            #radius = int(radius)
-            #im= cv2.circle(display,center,radius,(0,255,0),2)
-            
-            cv2.imshow("fml",display)
-            cv2.waitKey()
+#        print "crash",our_contours
+#        for cnt in our_contours:
+#            hull = cv2.convexHull(cnt)
+#            display = image.copy()
+#            cv2.polylines(display, hull, 1, (0,255,0))
+#            
+#            #(x,y),radius = cv2.minEnclosingCircle(cnt)
+#            #center = (int(x),int(y))
+#            #radius = int(radius)
+#            #im= cv2.circle(display,center,radius,(0,255,0),2)
+#            
+#            cv2.imshow("fml",display)
+#            cv2.waitKey()
         
         #print "hi",test
 #        if show:
@@ -116,7 +138,7 @@ class TextDetector(object):
             width, height = (max_row-min_row) , (max_col-min_col)
             if width > 0 and height>0:
                 return float(width)/height
-            return 10000
+            return None
 
         def to_ER_tree(parent_component, parent_ER):
             # performs regularization simutaneously
@@ -124,9 +146,10 @@ class TextDetector(object):
                 child_ER = ER(child)
                 v = variation(parent_component, child)
                 a = aspect_ratio(child)
-                if a:
+                if a and v:
                     child_ER.variation = v - theta1*(a-a_max) if a > a_max else v - theta2*(a_min-a) if a<a_min else v
-
+                    if child_ER.variation < 0 :
+                        logging.error("variation is negative v:"+str(v)+" a:"+str(a))
                 else:
                     child_ER.variation = 100000
                 parent_ER.add_child(child_ER)
@@ -146,42 +169,53 @@ class TextDetector(object):
                 for index in range(len(tree.children)):
                     tree.children[index] = linear_reduction(tree.children[index])
                 return tree
-        def tree_acum(tree):
-            if len(tree.children) >= 2:
-                C = []
-                min_var = tree_acum(tree.children[0]).variation;
-                for index in range(len(tree.children)):
-                    C = C+tree_acum(tree.children[index])
-                    if tree_acum(tree.children[index]).variation<min_var:
-                        min_var =  tree_acum(tree.children[index]).variation
-                if tree.variation <= min_var:
-                    tree.children = []
-                    return tree
-                else:
-                    return C
-            else:
-                return tree
+                
         def tree_accumulation(tree):
             if len(tree.children) >= 2:
                 C = []
                 for c in tree.children:
                     C = C + tree_accumulation(c)
                 if tree.variation <= min(C, key=lambda c: c.variation):
-                    tree.children=empty
+                    tree.children=[]
                     return [tree]
                 else:
                     return C
             else:
                 return [tree]
+        
+        def t_size(tree):
+            if(len(tree.children)==0):
+                return 1
+            sizeOfChildren = 0
+            for child in tree.children:
+                sizeOfChildren += t_size(child)
+            return 1 + sizeOfChildren
+        def t_depth(tree):
+            if(len(tree.children)==0):
+                return 1
+            return 1+max(map(lambda c: t_depth(c), tree.children))
         current_component = root_node
+        print "Length ", len(component_to_points[root_node])
+        print "Size of root node ", t_size(root_node)
+        print "Depth of root node ", t_depth(root_node)
+        print root_node
         parent_ER = ER(current_component)
+        parent_ER.variation = 100000
         to_ER_tree(root_node, parent_ER)
+        print "Size of ER tree ", t_size(parent_ER)
+        print "Depth of ER tree ", t_depth(parent_ER)
+        
         print "ER Tree ", parent_ER
         lr = linear_reduction(parent_ER)
-        print len(lr.children)
-        print "ER Tree after linear reduction ", lr
+        print "Size after linear reduction ", t_size(lr)
+        print "Depth of LR ", t_depth(lr)
+        print lr
+#        print len(lr.children)
+#        print "ER Tree after linear reduction ", lr
         acc = tree_accumulation(lr)
-        print "ER Tree after accumulation ", acc
+        print "Size after accumulation ", len(acc)
+        print "Accumulation ", acc
+#        print "ER Tree after accumulation ", acc
         return acc
     
     @staticmethod 

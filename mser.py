@@ -72,13 +72,18 @@ class MSER:
             return str(self)
         def index(self):
             return self.row * self.cols + self.col
-        def neighbours(self, universe, image_height, image_width):
-            def isClamped(p):
-                if p.row >= self.row-1 and p.row <= self.row+1 and p.row >= 0 and p.row <image_height:
-                    if p.col >= self.col-1 and p.col <= self.col+1 and p.col >= 0 and p.col < image_width:
-                        return not(p.row == self.row and p.col == self.col)
-                return False
-            return filter(isClamped, universe)
+        def neighbours(self, universe):
+#            def isClamped(p):
+#                if p.row >= self.row-1 and p.row <= self.row+1:
+#                    if p.col >= self.col-1 and p.col <= self.col+1:
+#                        return not(p.row == self.row and p.col == self.col)
+#                return False
+#                if p.row >= self.row-1 and p.row <= self.row+1 and p.row >= 0 and p.row <image_height:
+#                    if p.col >= self.col-1 and p.col <= self.col+1 and p.col >= 0 and p.col < image_width:
+#                        return not(p.row == self.row and p.col == self.col)
+#                return False
+#            return filter(isClamped, universe)
+            return filter(lambda n: abs(n.row-self.row)+abs(n.col-self.col)==1,universe)
     
     class ComponentTree(object):
         __slots__=["children", "level"]
@@ -97,11 +102,15 @@ class MSER:
             for child in children:
                 self.children.append(child)
             
-    def __init__(self, image, threshold=32):
+    def __init__(self, image, threshold=32,inv=True):
         self.threshold = int(threshold)
         self.image = image
         try:
             self.grey_scale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            if inv:
+                for i,row in enumerate(self.grey_scale):
+                    for j,e in enumerate(row):
+                        self.grey_scale[i,j] = 255 - e
         except:
             self.grey_scale = self.image
         
@@ -113,7 +122,7 @@ class MSER:
         for i, row in enumerate(self.grey_scale):
             logging.info("Working on row "+str(i)+"/"+str(num_rows)+" memory usage "+get_resource()+"MB")
             for j in xrange(len(row)):
-                universe.append(MSER.Point(i,j,int(row[j])/self.threshold, row[j]))
+                universe.append(MSER.Point(i,j,int(row[j])/self.threshold+1, row[j]))
 #            gc.collect()
 #            for j,element in enumerate(row):
 #                universe.append(MSER.Point(i,num_rows,j, num_cols,int(element)/self.threshold, element))
@@ -131,7 +140,7 @@ class MSER:
         def already_processed_neighbours(point,higher_intensity):
             if point.intensity < higher_intensity[-1].intensity:
                 higher_intensity = filter(lambda neighbour: neighbour.intensity>=point.intensity , universe)        
-            return point.neighbours(higher_intensity,num_rows,num_cols) 
+            return point.neighbours(higher_intensity) 
         logging.info("Preprocessing step")
         num_points = len(universe)
         i = 0
@@ -152,6 +161,7 @@ class MSER:
             current_canonical = set1[point].find()
             current_node = set2[subtreeRoot[current_canonical.data]].find()
             logging.info("Modifying tree for point "+str(i)+"/"+str(num_points)+"("+str(i*100/num_points)+"%) point ")
+            print point, " ", point.intensity
             for neighbour in already_processed_neighbours(point,higher_intensity) :
                 if neighbour.intensity >= point.intensity:
                     neighbour_canonical = set1[neighbour].find()
@@ -181,16 +191,37 @@ class MSER:
         logging.info("Post processing ")
         for point in universe:
             component_map[point] = nodes[set2[point].find().data]
-            
-        for point in component_map.keys():
-            try:
-                inv_component_map[component_map[point]].append(point)
-            except:
-                inv_component_map[component_map[point]] = [point]
         
+        def give_point_to_component(point,component,inv_component_map):
+            try:
+                print "adding point " , point, " to component ", component
+                inv_component_map[component_map[point]].add(point)
+            except:
+                print "creating new set for point ", point
+                inv_component_map[component_map[point]] = Set([point])
+            for child in component.children:
+                give_point_to_component(point, child,inv_component_map)
+            
+        def get_points_from_subtree(tree,inv_component_map):
+            for c in tree.children:
+                get_points_from_subtree(c, inv_component_map)
+            for c in tree.children:
+                inv_component_map[tree] |= inv_component_map[c]
+        
+        for point in component_map.keys():
+            give_point_to_component(point, component_map[point],inv_component_map)
+#            try:
+#                inv_component_map[component_map[point]].append(point)
+#            except:
+#                inv_component_map[component_map[point]] = [point]
+            
         root_point = subtreeRoot[set1[set2[universe[0]].find().data].find().data]
         print "Root point ", root_point, " ", root_point.intensity
-        print component_map[root_point]
+        total_len = 0        
+        for c in inv_component_map.keys():
+            total_len += len(inv_component_map[c])
+        print "Total points in inv ",total_len
+        
         return {"nodes":nodes[root_point], "node_map":nodes,"components":component_map, "component to points":inv_component_map}
                         
     def build_component_tree(self):
