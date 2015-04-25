@@ -354,13 +354,14 @@ if __name__ == "__main__":
         
         # TODO
         filepath = Dataset.save_data()
-        print "Saved trained data to : " , filepath
+        #print "Saved trained data to : " , filepath
         trained_data = None
     else:
         trained_data = Dataset.load_data(trained_path)
     
     # filter the character candidates according to
     # section 4 (4.2) of Multi-Orientation Scene Text Detection with Adaptive Clustering (Xu-Cheng Yin et al.)
+    # not implemented
     candidates = TextDetector.candidates_selection(mser_regions)
     candidates = TextDetector.candidates_elimination(candidates)
     
