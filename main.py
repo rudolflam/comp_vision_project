@@ -17,25 +17,66 @@ def show_image(image, window_name="Image"):
     cv2.destroyAllWindows()
 
 class TextDetector(object):
+    @staticmethod
+    def draw_component(image, component_to_points, component):
+        points = component_to_points[component]
+        TextDetector.draw_points(image, points)
+    @staticmethod
+    def draw_colour_component(image, component_to_points, component):
+        points = component_to_points[component]
+        TextDetector.draw_colour_points(image, points)
+        
+    @staticmethod
+    def draw_points(image, points):
+        copy = image.copy()
+        for point in points:
+            copy[point.row][point.col] = 255
+        cv2.imshow("image", copy)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+    @staticmethod
+    def draw_colour_points(image, points):
+        copy = image.copy()
+        for point in points:
+            copy[point.row][point.col] = [255,0,0]
+        cv2.imshow("image", copy)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
     @staticmethod    
     def run_MSER(image, show=False):
-        mser = MSER(image, 10)
+        mser = MSER(image, 64)
         data = mser.build_component_tree()
         universe = data["points"]
         root_node = data["root"]
         nodes= data["nodes"]
-        print data.keys()
-        components_to_points = data["component to points"]
+        component_to_points = data["component to points"]
+
+        # prune the excess regions
+        mser_regions = TextDetector.prune_MSERs(mser.grey_scale, universe, root_node, nodes, component_to_points)
         
-        # prune the excess regioins
-        mser_regions = TextDetector.prune_MSERs(image, universe, root_node, nodes, components_to_points)
-        print mser_regions
+#        def walk (tree, f):
+#            print "walked to ", tree
+#            f(image, component_to_points, tree)
+#            for c in tree.children:
+#                walk(c, f)
+#        walk(root_node, TextDetector.draw_component)
+        
+        
+        # convert to opencv contours
+#        contours = map( lambda c: component_to_points[c.component],mser_regions)
+#        def convertPoint(point):
+#            lst = [point.row,point.col]
+#            lst = np.array([lst],dtype= int32)
+#            return [lst]
+        #points = map(lambda i: map(lambda c : convertPoint(c),i),contours)
+        #print list(itertools.chain(*points))
+        
+        #test = np.array(reduce(lambda x, y: x+y, points),dtype= int32)
+#        our_contours =  map(lambda c: np.array(reduce(lambda x, y: x+y, map(lambda p: convertPoint(p), c)),dtype= int32),contours)
+
         if show:
-            hulls = [cv2.convexHull(p.reshape(-1,1,2)) for p in mser_regions ]
-             # display the image
-            display = image.copy()
-            cv2.polylines(display, hulls, 1, (0,255,0))
-            show_image(display)
+            for region in mser_regions:
+                TextDetector.draw_colour_component(image, component_to_points, region.component)
         return mser_regions
     
     @staticmethod
@@ -64,26 +105,41 @@ class TextDetector(object):
             return len(MSER.extremal_region(component_to_points, component))
         def variation(componentDelta, component):
             component_size=size(component)
-            return (size(componentDelta)-component_size) / component_size
+            return abs(size(componentDelta)-component_size) / component_size
         def aspect_ratio(component):
             copy = image.copy()
             points_in_region = MSER.extremal_region(component_to_points, component)
-            for i,row in enumerate(copy):
-                for j, _ in enumerate(row):
-                    # check if points in region contains a point at i,j
-                    if filter(lambda point:point.row == i and point.col == j, points_in_region):
-                        copy[i][j] = 255
-                    else:
-                        copy[i][j] = 0
-            contours = cv2.findContours(copy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
-            contour = max(contours, key=lambda cnt:cv2.contourArea(cnt))
-            _,_,w,h = cv2.boundingRect(contour)
-            return w/h
+            num_rows, num_cols = np.shape(copy)
+            min_row = num_rows
+            max_row = 0
+            min_col = num_cols
+            max_col = 0
+            for point in points_in_region:
+                if point.row < min_row:
+                    min_row = point.row
+                elif point.row > max_row:
+                    max_row = point.row
+                if point.col < min_col:
+                    min_col = point.col
+                elif point.col > max_col:
+                    max_col = point.col
+            width, height = (max_row-min_row) , (max_col-min_col)
+            if width > 0 and height>0:
+                return float(width)/height
+            return None
+
         def to_ER_tree(parent_component, parent_ER):
+            # performs regularization simutaneously
             for child in parent_component.children:
                 child_ER = ER(child)
-                print "Aspect ratio of child :", aspect_ratio(child)
-                child_ER.variation = variation(parent_component, child)
+                v = variation(parent_component, child)
+                a = aspect_ratio(child)
+                if a and v:
+                    child_ER.variation = v - theta1*(a-a_max) if a > a_max else v - theta2*(a_min-a) if a<a_min else v
+                    if child_ER.variation < 0 :
+                        logging.error("variation is negative v:"+str(v)+" a:"+str(a))
+                else:
+                    child_ER.variation = 100000
                 parent_ER.add_child(child_ER)
                 if child.children:
                     to_ER_tree(child, child_ER)
@@ -101,6 +157,7 @@ class TextDetector(object):
                 for index in range(len(tree.children)):
                     tree.children[index] = linear_reduction(tree.children[index])
                 return tree
+<<<<<<< HEAD
     
     
         def tree_acum(tree):
@@ -118,16 +175,66 @@ class TextDetector(object):
                     return C
             else:
                 return tree
+=======
+>>>>>>> a4e86d5dfdc31739c6714d9347f29502e626871c
                 
+        def tree_accumulation(tree):
+            if len(tree.children) >= 2:
+                C = []
+                for c in tree.children:
+                    C = C + tree_accumulation(c)
+                if tree.variation <= min(C, key=lambda c: c.variation).variation:
+                    print "Comparing ",tree.variation, " and ", min(C, key=lambda c: c.variation)
+                    tree.children=[]
+                    return [tree]
+                else:
+                    return C
+            else:
+                return [tree]
+        
+        def t_size(tree):
+            if(len(tree.children)==0):
+                return 1
+            sizeOfChildren = 0
+            for child in tree.children:
+                sizeOfChildren += t_size(child)
+            return 1 + sizeOfChildren
+        def t_depth(tree):
+            if(len(tree.children)==0):
+                return 1
+            return 1+max(map(lambda c: t_depth(c), tree.children))
         current_component = root_node
+        print "Length ", len(component_to_points[root_node])
+        print "Size of root node ", t_size(root_node)
+        print "Depth of root node ", t_depth(root_node)
+        print root_node
         parent_ER = ER(current_component)
+        parent_ER.variation = 100000
         to_ER_tree(root_node, parent_ER)
-        print "Before :",parent_ER
-        linear_reduction(parent_ER)
-        print "After :",parent_ER    
+        logging.info( "Size of ER tree "+ str(t_size(parent_ER)))
+        logging.info( "Depth of ER tree "+ str(t_depth(parent_ER)))
         
-        return 
-        
+        logging.info( "ER Tree "+ str(parent_ER))
+        lr = linear_reduction(parent_ER)
+        logging.info( "Size after linear reduction "+ str(t_size(lr)))
+        logging.info( "Depth of LR ", t_depth(lr))
+        logging.info( lr)
+        logging.info( len(lr.children))
+        logging.info( "ER Tree after linear reduction "+ str(lr))
+#        def walk (tree, f):
+#            print "walked to ", tree
+#            f(image, component_to_points, tree.component)
+#            for c in tree.children:
+#                walk(c, f)
+#            
+#        walk(lr, TextDetector.draw_component)
+        acc = tree_accumulation(lr)
+        logging.info( "Size after accumulation "+str( len(acc)))
+        logging.info( "Accumulation "+ str(acc))
+        logging.info( "ER Tree after accumulation "+str(acc))
+
+        return acc
+    
     @staticmethod 
     def candidates_selection(mser_regions):
         #TODO
@@ -267,13 +374,14 @@ if __name__ == "__main__":
         
         # TODO
         filepath = Dataset.save_data()
-        print "Saved trained data to : " , filepath
+        #print "Saved trained data to : " , filepath
         trained_data = None
     else:
         trained_data = Dataset.load_data(trained_path)
     
     # filter the character candidates according to
     # section 4 (4.2) of Multi-Orientation Scene Text Detection with Adaptive Clustering (Xu-Cheng Yin et al.)
+    # not implemented
     candidates = TextDetector.candidates_selection(mser_regions)
     candidates = TextDetector.candidates_elimination(candidates)
     
