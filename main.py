@@ -157,26 +157,6 @@ class TextDetector(object):
                 for index in range(len(tree.children)):
                     tree.children[index] = linear_reduction(tree.children[index])
                 return tree
-<<<<<<< HEAD
-    
-    
-        def tree_acum(tree):
-            if len(tree.children) >= 2:
-                C = []
-                min_var = tree_acum(tree.children[0]).variation;
-                for index in range(len(tree.children)):
-                    C = C+tree_acum(tree.children[index])
-                    if tree_acum(tree.children[index]).variation<min_var:
-                        min_var =  tree_acum(tree.children[index]).variation
-                if tree.variation <= min_var:
-                    tree.children = []
-                    return tree
-                else:
-                    return C
-            else:
-                return tree
-=======
->>>>>>> a4e86d5dfdc31739c6714d9347f29502e626871c
                 
         def tree_accumulation(tree):
             if len(tree.children) >= 2:
