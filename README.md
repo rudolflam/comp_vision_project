@@ -5,3 +5,5 @@ This is an implementation of a character detection part of the text detection al
 
 This implementation includes the writing the MSER algorithm, which is the crux of the character detection, from a component tree. To generate this tree, a quasi-linear time algorithm based on the paper <b>Quasi-linear algorithm for the component tree</b> by L. Najman and M. Couprie
 
+An example run: 
+![Alt Text](https://github.com/rudolflam/comp_vision_project/blob/master/result.jpg)
